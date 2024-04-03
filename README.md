@@ -1,4 +1,4 @@
-# xtream AI Challenge
+﻿# xtream AI Challenge
 
 ## Ready Player 1? 🚀
 
@@ -82,4 +82,35 @@ So, ready to add some sparkle to this challenge? Let's make these diamonds shine
 ---
 
 ## How to run
-Please fill this section as part of the assignment.
+
+### Challenge 1
+
+The Jupyter notebook used for the first challenge is `diamonds_notebook.ipynb`.
+
+The notebook was tested using two methods: on **Google Colab** or, locally, on **Anaconda**.
+
+#### Execution on Google Colab
+
+This is the simplest method: just import the notebook on Google Colab and the code blocks will take care of everything! In fact, the notebook was originally written using Google Colab and so it's the first tested method.
+
+There is no need to import the dataset, just execute the first code block.
+
+Since the library h2o is not installed by default on Google Colab, there is a pip command on the second code block to automatically manage the missing dependency.
+
+Just enjoy the notebook on Google Colab!
+
+#### Local execution on Anaconda
+
+The notebook was also tested locally: that's why there's a requirements.txt file in the repository. Assuming Anaconda is already installed, here are the instructions to execute the notebook properly:
+
+ 1. **Create the Conda environment** with
+ `conda create --name xtream --file requirements.txt -c h2oai -c conda-forge`
+ This command will create an environment called xtream and it will install all the dependencies listed in requirements.txt, using the channels h2oai (to retrieve the h2o library) and conda-forge.
+ 2. **Activate the xtream environment** with 
+ `conda activate xtream`
+ 3. **Start the jupyter notebook** with 
+ `jupyter notebook diamonds_notebook.ipynb`
+
+In this case, there is no need to execute the first code block, since the csv is already on the filesystem.
+
+
