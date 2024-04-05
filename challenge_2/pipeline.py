@@ -1,24 +1,51 @@
-# TODO try to optimize the code, then doc and README
-# (find out if h2o cluster can only be started once in the pipeline, etc.)
+"""
+Pipeline for processing, transforming, evaluating, and deploying a diamonds dataset model.
+This script uses the Luigi library to manage data processing tasks in a sequential and dependent way.
 
-# Cristian Piacente
+Cristian Piacente
+"""
 
-import luigi # Since xtream uses it, as written on https://xtreamers.io/portfolio/power-forecasting/
-
+import luigi
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_squared_log_error, r2_score
-
 import h2o
 from h2o.automl import H2OAutoML
 from h2o.estimators import H2OGradientBoostingEstimator
-
 import os
+import warnings
+import logging
+
+
+# Set up logger
+logging.basicConfig(filename='luigi.log', level=logging.INFO, 
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s')
+logger = logging.getLogger('luigi-pipeline')
+
+# Get configuration file
+config = luigi.configuration.get_config()
+
+# Dict that contains the default paths configurated in luigi.cfg
+default_paths = {
+    'input_csv': config.get('DataPreprocessing', 'input_csv'),
+    'cleaned_csv': config.get('DataPreprocessing', 'cleaned_csv'),
+    'transformed_csv': config.get('DataTransformation', 'transformed_csv'),
+    'train_csv': config.get('SplitDataset', 'train_csv'),
+    'test_csv': config.get('SplitDataset', 'test_csv'),
+    'model_file': config.get('EvalModel', 'model_file'),
+    'metrics_csv': config.get('PerformanceEval', 'metrics_csv'),
+    'deploy_model_file': config.get('DeployModel', 'deploy_model_file')
+}
 
 
 
 class BetterCompleteCheck:
+    """
+    A mixin to enhance Luigi's Task with a robust complete method that considers input modifications.
+    It ensures tasks are re-executed when their dependencies are updated.
+    """
+
     # Luigi's complete method override, to know if a task doesn't need to be executed again
     def complete(self):
         # Added support for dict (also recursive)
@@ -71,8 +98,17 @@ class BetterCompleteCheck:
 
 
 class DataPreprocessing(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    cleaned_csv = luigi.Parameter(default='datasets/diamonds/diamonds_cleaned.csv')
+    """
+    Cleans the raw diamonds dataset by removing missing values, duplicates and inconsistent rows.
+    Outputs a cleaned dataset file.
+
+    Parameters:
+    - input-csv: Path to the input csv file containing raw diamonds data. Default: 'datasets/diamonds/diamonds.csv'
+    - cleaned-csv: Path to the output csv file for cleaned data. Default: 'datasets/diamonds/diamonds_cleaned.csv'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    cleaned_csv = luigi.Parameter(default=default_paths['cleaned_csv'])
     
 
     def requires(self):
@@ -85,21 +121,34 @@ class DataPreprocessing(BetterCompleteCheck, luigi.Task):
     
 
     def run(self):
+        logger.info(f'Started task {self.__class__.__name__}')
+
         # Read diamonds.csv
         df = pd.read_csv(self.input_csv)
+
+        logger.info('Retrieved the raw dataset')
 
         # Drop rows with missing values (even though there aren't any in the original dataset)
         df.dropna(inplace=True)
 
+        logger.info('Dropped the missing values')
+
         # Drop duplicated rows
         df.drop_duplicates(subset=None, keep='first', inplace=True, ignore_index=False)
+
+        logger.info('Dropped the duplicates')
 
         # Drop inconsistent rows
         inconsistent_rows = df[(df['price'] <= 0) | (df['x'] == 0) | (df['y'] == 0) | (df['z'] == 0)]
         df = df[~df.index.isin(inconsistent_rows.index)]
 
+        logger.info('Dropped the inconsistent data')
+
         # Save to diamonds_cleaned.csv
         df.to_csv(self.output().path, index=False)
+
+        logger.info('Saved to csv the cleaned dataset')
+        logger.info(f'Finished task {self.__class__.__name__}')
 
 
     def output(self):
@@ -108,8 +157,17 @@ class DataPreprocessing(BetterCompleteCheck, luigi.Task):
 
 
 class DataTransformation(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    transformed_csv = luigi.Parameter(default='datasets/diamonds/diamonds_transformed.csv')
+    """
+    Applies ordinal encoding to categorical features within the cleaned diamonds dataset.
+    Outputs a dataset file with transformed features for model training.
+
+    Parameters:
+    - input-csv: Path to the input csv file containing raw diamonds data. Default: 'datasets/diamonds/diamonds.csv'
+    - transformed-csv: Path for the output dataset with transformed features after preprocessing. Default: 'datasets/diamonds/diamonds_transformed.csv'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    transformed_csv = luigi.Parameter(default=default_paths['transformed_csv'])
 
 
     def requires(self):
@@ -118,6 +176,8 @@ class DataTransformation(BetterCompleteCheck, luigi.Task):
     
 
     def run(self):
+        logger.info(f'Started task {self.__class__.__name__}')
+
         # From worst to best categories
         cut_order = ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal']
         color_order = ['D', 'E', 'F', 'G', 'H', 'I', 'J']
@@ -126,15 +186,22 @@ class DataTransformation(BetterCompleteCheck, luigi.Task):
         # Read diamonds_cleaned.csv
         df = pd.read_csv(self.input().path)
 
+        logger.info('Retrieved the cleaned dataset')
+
         # Ordinal encoding on the categorical features
         df['cut'] = OrdinalEncoder(categories=[cut_order]).fit_transform(df[['cut']])
         df['color'] = OrdinalEncoder(categories=[color_order]).fit_transform(df[['color']])
         df['clarity'] = OrdinalEncoder(categories=[clarity_order]).fit_transform(df[['clarity']])
 
+        logger.info('Applied ordinal encoding to the categorical features')
+
         # A casting here would be useless: it's necessary to handle the types later
         
         # Save to diamonds_transformed.csv
         df.to_csv(self.output().path, index=False)
+
+        logger.info('Saved to csv the transformed dataset')
+        logger.info(f'Finished task {self.__class__.__name__}')
     
 
     def output(self):
@@ -143,9 +210,19 @@ class DataTransformation(BetterCompleteCheck, luigi.Task):
 
 
 class SplitDataset(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    train_csv = luigi.Parameter(default='datasets/diamonds/diamonds_train.csv')
-    test_csv = luigi.Parameter(default='datasets/diamonds/diamonds_test.csv')
+    """
+    Splits the transformed dataset into training and testing sets.
+    Outputs two files, one for training and one for testing.
+    
+    Parameters:
+    - input-csv: Path to the input csv file containing raw diamonds data. Default: 'datasets/diamonds/diamonds.csv'
+    - train-csv: Path for the output training set (after preprocessing and transformation). Default: 'datasets/diamonds/diamonds_train.csv'
+    - test-csv: Path for the output testing set (already cleaned too). Default: 'datasets/diamonds/diamonds_test.csv'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    train_csv = luigi.Parameter(default=default_paths['train_csv'])
+    test_csv = luigi.Parameter(default=default_paths['test_csv'])
     
 
     def requires(self):
@@ -154,21 +231,29 @@ class SplitDataset(BetterCompleteCheck, luigi.Task):
     
 
     def run(self):
-        # Initialize h2o cluster
-        h2o.init()
+        logger.info(f'Started task {self.__class__.__name__}')
+
+        # Connect to the h2o cluster managed by the wrapper script
+        h2o.connect()
+
+        logger.info('Connected to h2o cluster')
 
         # Retrieve transformed dataframe
         h2o_df = h2o.import_file(self.input().path)
 
+        logger.info('Retrieved the transformed dataset')
+
         # Split into train and test
         train, test = h2o_df.split_frame(ratios = [.8], seed=1234)
+
+        logger.info('Split into training set and test set')
 
         # Save to diamonds_train.csv and diamonds_test.csv
         h2o.export_file(train, self.train_csv, force=True)
         h2o.export_file(test, self.test_csv, force=True)
 
-        # Shut down h2o cluster
-        h2o.cluster().shutdown()
+        logger.info('Saved to csv the training set and test set')
+        logger.info(f'Finished task {self.__class__.__name__}')
         
 
     def output(self):
@@ -178,8 +263,17 @@ class SplitDataset(BetterCompleteCheck, luigi.Task):
 
 
 class EvalModel(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    model_file = luigi.Parameter(default='models/eval_model')
+    """
+    Trains up to 10 GBM models only on the training set and selects the best one, based on performance.
+    Outputs the trained model file, which is not for production use.
+
+    Parameters:
+    - input-csv: Path for the raw dataset to model. Default: 'datasets/diamonds/diamonds.csv'
+    - model-file: Path to save the trained model used for evaluation purposes. Default: 'models/eval_model'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    model_file = luigi.Parameter(default=default_paths['model_file'])
 
 
     def requires(self):
@@ -188,12 +282,18 @@ class EvalModel(BetterCompleteCheck, luigi.Task):
     
 
     def run(self):
-        # Initialize h2o cluster
-        h2o.init()
+        logger.info(f'Started task {self.__class__.__name__}')
+
+        # Connect to the h2o cluster managed by the wrapper script
+        h2o.connect()
+
+        logger.info('Connected to h2o cluster')
 
         # Retrieve the train set with proper column types for categorical features
         train = h2o.import_file(self.input()['train_csv'].path, 
                                 col_types = {'cut': 'enum', 'color': 'enum', 'clarity': 'enum'})
+        
+        logger.info('Retrieved the training set')
 
         # Target
         y = 'price'
@@ -206,11 +306,13 @@ class EvalModel(BetterCompleteCheck, luigi.Task):
         aml = H2OAutoML(max_models=10, seed=1234, include_algos=['GBM'])
         aml.train(x=X, y=y, training_frame=train)
 
+        logger.info('Trained up to 10 GBM models using H2O AutoML')
+
         # Save the best model as eval_model
         h2o.save_model(model=aml.leader, filename=self.output().path, force=True)
 
-        # Shut down h2o cluster
-        h2o.cluster().shutdown()
+        logger.info('Saved to file the best model used for evaluation')
+        logger.info(f'Finished task {self.__class__.__name__}')
 
 
     def output(self):
@@ -219,8 +321,18 @@ class EvalModel(BetterCompleteCheck, luigi.Task):
 
 
 class PerformanceEval(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    metrics_csv = luigi.Parameter(default='evaluation/metrics.csv')
+    """
+    Evaluates the trained model's performance on the test dataset.
+    Outputs a csv file with performance metrics like MSE, RMSE, MAE, etc.
+    Unlike the other tasks, DeployModel doesn't depend on this and so it has to be executed separately.
+    
+    Parameters:
+    - input-csv: Path to the input csv file containing raw diamonds data. Default: 'datasets/diamonds/diamonds.csv'
+    - metrics-csv: Path to save the performance test metrics csv file. Default: 'evaluation/metrics.csv'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    metrics_csv = luigi.Parameter(default=default_paths['metrics_csv'])
 
 
     def requires(self):
@@ -230,22 +342,35 @@ class PerformanceEval(BetterCompleteCheck, luigi.Task):
 
 
     def run(self):
-        # Initialize h2o cluster
-        h2o.init()
+        logger.info(f'Started task {self.__class__.__name__}')
+
+        # Connect to the h2o cluster managed by the wrapper script
+        h2o.connect()
+
+        logger.info('Connected to h2o cluster')
 
         # Retrieve the model
         model = h2o.load_model(self.input()['model_file'].path)
 
+        logger.info('Retrieved the evaluation model')
+
         # Retrieve the test set with proper column types for categorical features
         test = h2o.import_file(self.input()['splitted_dataset_csv']['test_csv'].path, 
                                 col_types = {'cut': 'enum', 'color': 'enum', 'clarity': 'enum'})
+        
+        logger.info('Retrieved the test set')
 
         # Get the price predictions
         predictions = model.predict(test).round()
 
+        logger.info('Got the predictions')
+
         # Convert from H2OFrame column to Pandas Series for compatibility
-        actual_prices = test['price'].as_data_frame()['price']
-        predicted_prices = predictions.as_data_frame()['predict']
+        with warnings.catch_warnings():
+            # Suppress the warning about installing additional libraries
+            warnings.simplefilter("ignore")
+            actual_prices = test['price'].as_data_frame()['price']
+            predicted_prices = predictions.as_data_frame()['predict']
 
         # Calculate the metrics
         mse = mean_squared_error(actual_prices, predicted_prices)
@@ -254,6 +379,8 @@ class PerformanceEval(BetterCompleteCheck, luigi.Task):
         rmsle = np.sqrt(mean_squared_log_error(actual_prices, predicted_prices))
         mean_residual_deviance = mse
         r2 = r2_score(actual_prices, predicted_prices)
+
+        logger.info('Calculated the metrics on the test set')
 
         # Model name, it contains the timestamp too
         model_name = model.params['model_id']['actual']['name']
@@ -272,13 +399,15 @@ class PerformanceEval(BetterCompleteCheck, luigi.Task):
         # Create the path directory if it doesn't exist
         os.makedirs(os.path.dirname(self.output().path), exist_ok=True)
 
+        logger.info('Prepared the path and data (model name + metrics) for appending to csv')
+
         # Append the data to metrics.csv
         with open(self.output().path, 'a+') as f:
             # The header gets written only if the csv is empty
             metrics_df.to_csv(f, mode='a+', header=f.tell()==0, index=False, lineterminator='\n')
 
-        # Shut down h2o cluster
-        h2o.cluster().shutdown()
+        logger.info('Appended to csv the model name and metrics')
+        logger.info(f'Finished task {self.__class__.__name__}')
 
 
     def output(self):
@@ -287,8 +416,17 @@ class PerformanceEval(BetterCompleteCheck, luigi.Task):
 
 
 class DeployModel(BetterCompleteCheck, luigi.Task):
-    input_csv = luigi.Parameter(default='datasets/diamonds/diamonds.csv')
-    deploy_model_file = luigi.Parameter(default='models/deploy_model')
+    """
+    Deploys the model by re-training it on the entire dataset with the best hyperparameters from EvalModel.
+    Outputs the deployment model file, ready for production use.
+    
+    Parameters:
+    - input-csv: Path for the raw dataset to deploy the model on. Default: 'datasets/diamonds/diamonds.csv'
+    - deploy-model-file: Path to save the deployment model. Default: 'models/deploy_model'
+    """
+
+    input_csv = luigi.Parameter(default=default_paths['input_csv'])
+    deploy_model_file = luigi.Parameter(default=default_paths['deploy_model_file'])
 
 
     def requires(self):
@@ -298,29 +436,58 @@ class DeployModel(BetterCompleteCheck, luigi.Task):
                 
     
     def run(self):
-        # Initialize h2o cluster
-        h2o.init()
+        logger.info(f'Started task {self.__class__.__name__}')
+
+        # Connect to the h2o cluster managed by the wrapper script
+        h2o.connect()
+
+        logger.info('Connected to h2o cluster')
 
         # Retrieve the model
         model = h2o.load_model(self.input()['model_file'].path)
 
+        logger.info('Retrieved the evaluation model')
+
         # Retrieve transformed dataframe with proper column types for categorical features
         h2o_df = h2o.import_file(self.input()['transformed_csv'].path,
                                  col_types = {'cut': 'enum', 'color': 'enum', 'clarity': 'enum'})
+        
+        logger.info('Retrieved the transformed dataset')
 
         # Freeze the hyperparameters from the original model
         params = model.actual_params
+
+        # Remove early stopping parameters if they exist
+        params_to_remove = ['stopping_rounds', 'stopping_metric', 'stopping_tolerance']
+        for param in params_to_remove:
+            params.pop(param, None)
+
+        logger.info('Prepared the hyperparameters for the deployment model')
 
         # Train the model on all the available data with the same hyperparameters
         deploy_model = H2OGradientBoostingEstimator(**params)
         deploy_model.train(y='price', training_frame=h2o_df)
 
+        logger.info('Got the deployment model trained on the whole dataset')
+
         # Save the model as deploy_model
         h2o.save_model(model=deploy_model, filename=self.output().path, force=True)
 
-        # Shut down h2o cluster
-        h2o.cluster().shutdown()
+        logger.info('Saved to file the deployment model')
+        logger.info(f'Finished task {self.__class__.__name__}')
 
 
     def output(self):
         return luigi.LocalTarget(self.deploy_model_file)
+
+
+
+class FullPipeline(luigi.WrapperTask):
+    """
+    A wrapper task to run the full pipeline with default parameters.
+    It ensures that both DeployModel and PerformanceEval are executed.
+
+    This is used by the wrapper script for executing every single task of the pipeline.
+    """
+    def requires(self):
+        return [DeployModel(), PerformanceEval()]

@@ -127,4 +127,14 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Anaconda
 conda
+
+# My pipeline artifacts
+/challenge_2/evaluation
+/challenge_2/models
+datasets/diamonds/diamonds_cleaned.csv
+datasets/diamonds/diamonds_test.csv
+datasets/diamonds/diamonds_train.csv
+datasets/diamonds/diamonds_transformed.csv
