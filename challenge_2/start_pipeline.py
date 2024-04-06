@@ -23,7 +23,7 @@ def main():
         logger.info('Initialized h2o cluster')
 
         # Execute Luigi pipeline with default parameters
-        subprocess.run(["python", "-m", "luigi", "--module", "pipeline", "FullPipeline"], check=True)
+        subprocess.run(["python", "-m", "luigi", "--module", "pipeline", "FullPipeline", "--local-scheduler"], check=True)
 
         logger.info('Run the pipeline successfully!')
     

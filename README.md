@@ -151,10 +151,10 @@ The first step (changing the working directory in the Conda environment) is the 
  3. **Execute the task**, e.g. using 
 
 	> python -m luigi --module pipeline DataPreprocessing --cleaned-csv
-	> "../datasets/diamonds/example_custom_path.csv"
+	> "../datasets/diamonds/example_custom_path.csv" --local-scheduler
 
-	By executing a task manually we can customize the parameters directly via command line, without changing the configuration file. A parameter specified in this way has the priority over `luigi.cfg`. 
-	If there is no need to monitor the pipeline, for development purposes `--local-scheduler` should be specified in the command. Obviously, for production usage a centralized scheduler must be used.
+	By executing a task manually we can customize the parameters directly via command line, without modifying the configuration file. A parameter specified in this way has the priority over `luigi.cfg`. 
+	For development purposes `--local-scheduler` is in the command, but obviously for production usage a centralized scheduler must be used.
 4. **Shut down the h2o cluster** to avoid wasting resources, if not used anymore. 
 In this case it has to be done manually, e.g. with `h2o.cluster().shutdown()`. 
 
