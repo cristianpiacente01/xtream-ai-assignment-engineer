@@ -128,7 +128,7 @@ class DataPreprocessing(BetterCompleteCheck, luigi.Task):
 
         logger.info('Retrieved the raw dataset')
 
-        # Drop rows with missing values (even though there aren't any in the original dataset)
+        # Drop rows with missing values
         df.dropna(inplace=True)
 
         logger.info('Dropped the missing values')
@@ -138,9 +138,27 @@ class DataPreprocessing(BetterCompleteCheck, luigi.Task):
 
         logger.info('Dropped the duplicates')
 
+        # Possible categorical values
+        possible_values = {
+            'cut': ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal'],
+            'color': [chr(i) for i in range(ord('D'), ord('Z') + 1)], # From 'D' to 'Z'
+            'clarity': ['I1', 'SI2', 'SI1', 'VS2', 'VS1', 'VVS2', 'VVS1', 'IF']
+        }
+
+        # Check numerical columns for negative or zero values
+        numerical_checks = (df['carat'] <= 0) | (df['depth'] <= 0) | (df['table'] <= 0) | \
+                        (df['price'] <= 0) | (df['x'] <= 0) | (df['y'] <= 0) | (df['z'] <= 0)
+
+        # Check categorical columns for invalid values
+        categorical_checks = (~df['cut'].isin(possible_values['cut'])) | \
+                            (~df['color'].isin(possible_values['color'])) | \
+                            (~df['clarity'].isin(possible_values['clarity']))
+
+        # Combine checks to filter out inconsistent rows
+        inconsistent_rows = numerical_checks | categorical_checks
+        
         # Drop inconsistent rows
-        inconsistent_rows = df[(df['price'] <= 0) | (df['x'] == 0) | (df['y'] == 0) | (df['z'] == 0)]
-        df = df[~df.index.isin(inconsistent_rows.index)]
+        df = df[~inconsistent_rows]
 
         logger.info('Dropped the inconsistent data')
 
@@ -189,13 +207,11 @@ class DataTransformation(BetterCompleteCheck, luigi.Task):
         logger.info('Retrieved the cleaned dataset')
 
         # Ordinal encoding on the categorical features
-        df['cut'] = OrdinalEncoder(categories=[cut_order]).fit_transform(df[['cut']])
-        df['color'] = OrdinalEncoder(categories=[color_order]).fit_transform(df[['color']])
-        df['clarity'] = OrdinalEncoder(categories=[clarity_order]).fit_transform(df[['clarity']])
+        df['cut'] = OrdinalEncoder(categories=[cut_order], dtype=int).fit_transform(df[['cut']])
+        df['color'] = OrdinalEncoder(categories=[color_order], dtype=int).fit_transform(df[['color']])
+        df['clarity'] = OrdinalEncoder(categories=[clarity_order], dtype=int).fit_transform(df[['clarity']])
 
         logger.info('Applied ordinal encoding to the categorical features')
-
-        # A casting here would be useless: it's necessary to handle the types later
         
         # Save to diamonds_transformed.csv
         df.to_csv(self.output().path, index=False)
@@ -402,9 +418,9 @@ class PerformanceEval(BetterCompleteCheck, luigi.Task):
         logger.info('Prepared the path and data (model name + metrics) for appending to csv')
 
         # Append the data to metrics.csv
-        with open(self.output().path, 'a+') as f:
+        with open(self.output().path, 'a') as f:
             # The header gets written only if the csv is empty
-            metrics_df.to_csv(f, mode='a+', header=f.tell()==0, index=False, lineterminator='\n')
+            metrics_df.to_csv(f, mode='a', header=f.tell()==0, index=False, lineterminator='\n')
 
         logger.info('Appended to csv the model name and metrics')
         logger.info(f'Finished task {self.__class__.__name__}')
