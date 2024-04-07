@@ -11,6 +11,10 @@ import os
 from configparser import ConfigParser
 from pathlib import Path
 
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def handle_path(path: str, challenge_2: bool = False) -> str:
     """
@@ -32,6 +36,8 @@ def handle_path(path: str, challenge_2: bool = False) -> str:
 
     # Handle relative path if the path is not absolute
     if not path.is_absolute():
+        logger.info(f'Path {path} is relative and will be converted to absolute')
+
         # Current file path
         current_file = Path(__file__).resolve()
 
@@ -46,6 +52,8 @@ def handle_path(path: str, challenge_2: bool = False) -> str:
 
         # Create the absolute path
         path = base_dir / path
+
+    logger.info(f'Got absolute path {path}')
 
     # Return the filesystem absolute path
     return os.fspath(path)
@@ -67,16 +75,24 @@ def load_model(model_path: str = None) -> H2OGradientBoostingEstimator:
 
     if model_path is None:
         # No argument passed via command line, use luigi.cfg
+
+        logger.info('No custom model path was passed, using the path from luigi.cfg')
+
         config = ConfigParser()
         config.read(Path(__file__).parent.parent.parent / 'challenge_2' / 'luigi.cfg')
         model_path = config.get('DeployModel', 'deploy_model_file')
         model_path = handle_path(model_path, challenge_2=True)
     else:
         # Use the --model-path argument from command line
+
+        logger.info(f'Using the custom model path {model_path}')
+
         model_path = handle_path(model_path)
 
     # Load the model
     model = h2o.load_model(model_path)
+
+    logger.info(f'Loaded h2o model from {model_path}')
     
     # Returned the loaded model
     return model

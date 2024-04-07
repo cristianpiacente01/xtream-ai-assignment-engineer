@@ -8,6 +8,10 @@ Cristian Piacente
 import argparse
 import subprocess
 
+from app.logging_config import get_logger
+
+logger = get_logger('fastapi-wrapper')
+
 
 def main():
     # Initialize argparser
@@ -15,12 +19,21 @@ def main():
     parser.add_argument("--model-path", help="Custom path to the model file.", required=False)
     args = parser.parse_args()
 
+    logger.info('Initialized argparser')
+
     # Start the application, eventually passing a custom model path
     if args.model_path is None:
         # No custom path was passed
+
+        logger.info('Starting FastAPI application')
+
         subprocess.run(["python", "-m", "app.main"], check=True)
+
     else:
         # Start the application and pass the custom model path
+
+        logger.info(f'Starting FastAPI application with the model path {args.model_path}')
+
         subprocess.run(["python", "-m", "app.main", args.model_path], check=True)
 
 

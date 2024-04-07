@@ -20,6 +20,9 @@ import sys
 from app.dependencies import load_model
 from app.routers import prediction
 from app.model import set_model
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -32,8 +35,12 @@ async def lifespan(app: FastAPI):
     - app (FastAPI): The FastAPI application instance.
     """
 
+    logger.info('Initializing h2o cluster')
+
     # Initialize h2o cluster
     h2o.init()
+
+    logger.info('Initialized h2o cluster')
 
     # Load the model
     if len(sys.argv) > 1:
@@ -44,11 +51,17 @@ async def lifespan(app: FastAPI):
     # Set the model to use it globally
     set_model(model)
 
+    logger.info('Loaded the model successfully!')
+
     yield
+
+    logger.info('Shutting down h2o cluster')
 
     # Shut down h2o cluster
     if h2o.cluster() is not None:
         h2o.cluster().shutdown()
+
+    logger.info('Shut down h2o cluster, exiting the application...')
 
 
 

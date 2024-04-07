@@ -505,5 +505,6 @@ class FullPipeline(luigi.WrapperTask):
 
     This is used by the wrapper script for executing every single task of the pipeline.
     """
+    
     def requires(self):
         return [DeployModel(), PerformanceEval()]
