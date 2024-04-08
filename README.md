@@ -275,3 +275,7 @@ Used for predicting the price of a **single diamond**. Missing values are accept
 		    ]
 		}
 		```
+
+### Challenge 4
+
+Please refer to [this file](challenge_4/cloud_architecture.md) for the detailed cloud architecture!
