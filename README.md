@@ -1,4 +1,5 @@
-﻿# xtream AI Challenge
+﻿
+# xtream AI Challenge
 
 ## Ready Player 1? 🚀
 
@@ -167,21 +168,16 @@ For the 3rd challenge, a **FastAPI** application was developed to provide a REST
 
 The directory `challenge_3` is structured as follows:
 
-challenge_3/
-│
-├── `app/`: package containing the FastAPI application.
-│   │
-│   ├── `routers/`: package containing the routers, which provide endpoints for the REST API.
-│   │   ├── `__init__.py`
-│   │   └── `prediction.py`: module with the prediction endpoints; it uses dependency injection for retrieving the loaded model.
-│   │
-│   ├── `__init__.py`
-│   ├── `dependencies.py`: utilities module.
-│   ├── `logging_config.py`: module for configuring the logger consistently.
-│   ├── `main.py`: main module, which sets up the application with a lifespan that includes managing a h2o cluster and loading the model.
-│   └── `model.py`: module for managing the global state of the model.
-│   
-└── `start_api.py`: **wrapper** for starting the FastAPI application, with an optional custom model path argument.
+-  `app/`: package containing the FastAPI application.
+	-  `routers/`: package containing the routers, which provide endpoints for the REST API.
+		-  `__init__.py`
+		-  `prediction.py`: module with the prediction endpoints; it uses dependency injection for retrieving the loaded model.
+	-  `__init__.py`
+	-  `dependencies.py`: utilities module.
+	- `logging_config.py`: module for configuring the logger consistently.
+	-  `main.py`: main module, which sets up the application with a lifespan that includes managing a h2o cluster and loading the model.
+	-  `model.py`: module for managing the global state of the model.
+-  `start_api.py`: **wrapper** for starting the FastAPI application, with an optional custom model path argument.
 
 More details can be found on the documented source codes.
 
