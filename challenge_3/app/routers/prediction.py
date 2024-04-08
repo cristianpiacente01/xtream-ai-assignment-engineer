@@ -214,7 +214,7 @@ async def predict_bulk(features: MultipleDiamondFeatures, model=Depends(get_mode
     This endpoint accepts features for multiple diamonds and uses the loaded model, injected as a dependency. 
 
     IMPORTANT: missing values are accepted, BUT every feature must contain at least a value among the diamonds.
-    It means that a column can't have only missing values, it will lead to an error.
+    It means that a column can't have only missing values, it will lead to an error when invoking the predict function.
 
     Parameters:
     - features (MultipleDiamondFeatures): A Pydantic model representing the required features for multiple diamonds.

@@ -160,3 +160,122 @@ In this case it has to be done manually, e.g. with `h2o.cluster().shutdown()`.
 
 
 Enjoy the plumbing with *Luigi*!
+
+### Challenge 3
+
+For the 3rd challenge, a **FastAPI** application was developed to provide a REST API easily in Python.
+
+The directory `challenge_3` is structured as follows:
+
+challenge_3/
+│
+├── `app/`: package containing the FastAPI application.
+│   │
+│   ├── `routers/`: package containing the routers, which provide endpoints for the REST API.
+│   │   ├── `__init__.py`
+│   │   └── `prediction.py`: module with the prediction endpoints; it uses dependency injection for retrieving the loaded model.
+│   │
+│   ├── `__init__.py`
+│   ├── `dependencies.py`: utilities module.
+│   ├── `logging_config.py`: module for configuring the logger consistently.
+│   ├── `main.py`: main module, which sets up the application with a lifespan that includes managing a h2o cluster and loading the model.
+│   └── `model.py`: module for managing the global state of the model.
+│   
+└── `start_api.py`: **wrapper** for starting the FastAPI application, with an optional custom model path argument.
+
+More details can be found on the documented source codes.
+
+Before starting the application, it is recommended to **execute the Luigi pipeline** from challenge 2, since a h2o model file is needed.
+
+Currently, the model has to be a H2OGradientBoostingEstimator, since a Gradient Boosting Machine model was chosen.
+
+#### Start the FastAPI application
+
+To start the FastAPI application using the wrapper script, after activating the Conda environment as usual, here are the two commands which need to be run:
+ 1. `cd challenge_3`
+ 2. `python start_api.py [--model-path "../challenge_2/models/another_model_example"]`
+
+The argument `--model-path` is **optional**: if not passed, the application will get the model file path from **luigi.cfg**, from the challenge_2 directory.
+
+The custom model path option is useful for swapping the model and to load a model saved in another path.
+
+Both relative and absolute paths are supported.
+
+An alternative way to start the FastAPI application without using the wrapper script is to run the following command instead of step 2:
+
+> python -m app.main ["optional/path/to/model/file"]
+
+#### Endpoints
+
+Here is a description of the REST API endpoints: for a detailed documentation check out **http://localhost:8000/docs** after starting the application (auto-generated Swagger UI by FastAPI).
+
+ - `POST /v1/prediction`
+Used for predicting the price of a **single diamond**. Missing values are accepted and automatically managed by h2o, but **at least a value** must be passed.
+	 - The request body must be a JSON with valid input diamond features: validation is done using pydantic.
+	 - The response body is a JSON with a key "predicted_price" and an integer value, corresponding to the diamond's predicted worth.
+	 - To keep it **developer-friendly**, ordinal encoding is automatically performed, so the developer has to pass the categorical values and not the encoded values. 
+	 - **Example request body**
+	    ```
+		{
+		    "carat": 1.1,
+		    "cut": "Ideal",
+		    "color": "H",
+		    "clarity": "SI2",
+		    "depth": 62.0,
+		    "table": 55.0,
+		    "x": 6.61,
+		    "y": 6.65,
+		    "z": 4.11
+		}
+		```
+	 - **Example response body**
+	    ```
+		{
+		    "predicted_price": 4595
+		}
+		```
+ - `POST /v1/prediction/bulk`
+ Used for predicting the prices of **multiple diamonds**. Missing values are accepted but **every feature** must contain **at least a value** among the diamonds: there can't be a feature with only missing values.
+	 - The request body must be a JSON with a key "diamonds" and a list of diamonds, each one containing its features.
+	 - The response body is a JSON with a key "predicted_prices" and a list of integer values, corresponding to the predicted prices.
+	 - **Example request body**
+	    ```
+		{
+		    "diamonds": [
+                {
+		            "carat": 1.1,
+		            "clarity": "SI2",
+		            "depth": 62.0,
+		            "y": 6.65,
+		            "z": 4.11
+                },
+                {
+		            "carat": 8.72,
+		            "cut": "Ideal",
+		            "clarity": "VS2",
+		            "depth": 42.5
+                },
+                {
+		            "carat": 5.3,
+		            "cut": "Premium",
+		            "color": "F",
+		            "clarity": "IF",
+		            "depth": 62.0,
+		            "table": 25.0,
+		            "x": 3.61,
+		            "y": 9.45,
+		            "z": 8.3
+                }
+		    ]
+		}
+		```
+	 - **Example response body**
+	    ```
+		{
+		    "predicted_prices":  [
+		        4294,
+		        4846,
+		        14655
+		    ]
+		}
+		```
